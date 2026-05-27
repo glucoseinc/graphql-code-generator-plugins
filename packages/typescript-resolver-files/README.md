@@ -453,6 +453,47 @@ Project's TypeScript config, relative from project root. This helps type analysi
 - For objects types: statically compares object type's mapper types' field against schema types' fields, creating resolvers if required.
 - For enum types: ensure all allowed values are present.
 
+### resolverTypingStyle
+
+`annotation` or `prefer-annotation` or `prefer-satisfies` or `satisfies` or `{ query?, mutation?, subscription? }` (Default: `annotation`)
+
+Controls how TypeScript types are applied to generated resolver variables.
+
+- `annotation`: Always uses type annotation (`: Type`).
+- `prefer-annotation`: Generates new resolvers with type annotation. Preserves `satisfies` if the resolver is already written that way.
+- `prefer-satisfies`: Generates new resolvers with `satisfies`. Preserves type annotation if the resolver is already written that way.
+- `satisfies`: Always uses the `satisfies` operator.
+
+A string value applies the same style to all operation types. To configure each operation type independently, pass an object with `query`, `mutation`, and/or `subscription` keys. Omitted keys default to `annotation`.
+
+For example, `annotation` and `satisfies` options generate the following:
+
+```ts
+// annotation (default)
+export const myQuery: NonNullable<QueryResolvers['myQuery']> = async (_parent, _arg, _ctx) => { /* ... */ };
+
+// satisfies
+export const myQuery = (async (_parent, _arg, _ctx) => { /* ... */ }) satisfies NonNullable<QueryResolvers['myQuery']>;
+```
+
+To apply `satisfies` only to Mutation resolvers:
+
+```ts
+defineConfig({
+  resolverTypingStyle: { mutation: 'satisfies' },
+})
+```
+
+This generates:
+
+```ts
+// Query — uses default 'annotation'
+export const myQuery: NonNullable<QueryResolvers['myQuery']> = async (_parent, _arg, _ctx) => { /* ... */ };
+
+// Mutation — uses 'satisfies'
+export const myMutation = (async (_parent, _arg, _ctx) => { /* ... */ }) satisfies NonNullable<MutationResolvers['myMutation']>;
+```
+
 ### importExtension
 
 `` '' | `.${string}` ``(Default:`''`)
