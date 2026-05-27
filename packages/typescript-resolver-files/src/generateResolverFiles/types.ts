@@ -151,6 +151,7 @@ export interface GenerateResolverFilesContext {
     parsedGraphQLSchemaMeta: ParsedGraphQLSchemaMeta;
     graphQLObjectTypeResolversToGenerate: GraphQLObjectTypeResolversToGenerate;
     fixObjectTypeResolvers: ParsedPresetConfig['fixObjectTypeResolvers'];
+    resolverTypingStyle: ParsedPresetConfig['resolverTypingStyle'];
     emitLegacyCommonJSImports: boolean;
     importExtension: ImportExtension;
     generatedTypesFileMeta: GeneratedTypesFileMeta;

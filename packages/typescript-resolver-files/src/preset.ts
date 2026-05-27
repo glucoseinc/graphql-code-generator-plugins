@@ -71,6 +71,7 @@ export const preset: Types.OutputPreset<RawPresetConfig> = {
       typesPluginsConfig,
       tsMorphProjectOptions,
       fixObjectTypeResolvers,
+      resolverTypingStyle,
       emitLegacyCommonJSImports,
       importExtension,
     } = validatePresetConfig(rawPresetConfig, baseConfig);
@@ -266,6 +267,7 @@ export const preset: Types.OutputPreset<RawPresetConfig> = {
               typesSourceFile,
             },
             fixObjectTypeResolvers,
+            resolverTypingStyle,
             unmanagedResolvers: {
               ...mergedConfig.unmanagedResolvers,
             },

@@ -48,6 +48,11 @@ const defaultExpected: ParsedPresetConfig = {
     object: 'fast',
     enum: 'fast',
   },
+  resolverTypingStyle: {
+    query: 'annotation',
+    mutation: 'annotation',
+    subscription: 'annotation',
+  },
   emitLegacyCommonJSImports: true,
   importExtension: '',
 };
@@ -287,6 +292,82 @@ describe('validatePresetConfig - general', () => {
       validatePresetConfig({ fixObjectTypeResolvers: 'not-valid-for-sure' })
     ).toThrow(
       'Validation - presetConfig.fixObjectTypeResolvers must be an object, "smart", "fast" or "disabled" (default is "fast")'
+    );
+  });
+
+  it("returns result.resolverTypingStyle = 'prefer-satisfies' for all operation types if input is set as 'prefer-satisfies'", () => {
+    const parsed = validatePresetConfig({
+      resolverTypingStyle: 'prefer-satisfies',
+    });
+
+    expect(parsed).toEqual({
+      ...defaultExpected,
+      resolverTypingStyle: {
+        query: 'prefer-satisfies',
+        mutation: 'prefer-satisfies',
+        subscription: 'prefer-satisfies',
+      },
+    });
+  });
+
+  it("returns result.resolverTypingStyle = 'satisfies' for all operation types if input is set as 'satisfies'", () => {
+    const parsed = validatePresetConfig({ resolverTypingStyle: 'satisfies' });
+
+    expect(parsed).toEqual({
+      ...defaultExpected,
+      resolverTypingStyle: {
+        query: 'satisfies',
+        mutation: 'satisfies',
+        subscription: 'satisfies',
+      },
+    });
+  });
+
+  it("returns result.resolverTypingStyle = 'prefer-annotation' for all operation types if input is set as 'prefer-annotation'", () => {
+    const parsed = validatePresetConfig({
+      resolverTypingStyle: 'prefer-annotation',
+    });
+
+    expect(parsed).toEqual({
+      ...defaultExpected,
+      resolverTypingStyle: {
+        query: 'prefer-annotation',
+        mutation: 'prefer-annotation',
+        subscription: 'prefer-annotation',
+      },
+    });
+  });
+
+  it('throws if result.resolverTypingStyle is not valid', () => {
+    expect(() =>
+      validatePresetConfig({ resolverTypingStyle: 'not-valid-for-sure' })
+    ).toThrow(
+      'Validation - presetConfig.resolverTypingStyle must be "annotation", "prefer-annotation", "prefer-satisfies" or "satisfies" (default is "annotation")'
+    );
+  });
+
+  it('returns per-operation-type resolverTypingStyle when object form is used', () => {
+    const parsed = validatePresetConfig({
+      resolverTypingStyle: { mutation: 'satisfies' },
+    });
+
+    expect(parsed).toEqual({
+      ...defaultExpected,
+      resolverTypingStyle: {
+        query: 'annotation',
+        mutation: 'satisfies',
+        subscription: 'annotation',
+      },
+    });
+  });
+
+  it('throws if resolverTypingStyle.mutation is not valid', () => {
+    expect(() =>
+      validatePresetConfig({
+        resolverTypingStyle: { mutation: 'not-valid-for-sure' },
+      })
+    ).toThrow(
+      'Validation - presetConfig.resolverTypingStyle.mutation must be "annotation", "prefer-annotation", "prefer-satisfies" or "satisfies"'
     );
   });
 

@@ -21,7 +21,12 @@ export const handleGraphQLRootObjectTypeField: GraphQLTypeHandler<
   },
   {
     result,
-    config: { resolverGeneration, emitLegacyCommonJSImports, importExtension },
+    config: {
+      resolverGeneration,
+      resolverTypingStyle,
+      emitLegacyCommonJSImports,
+      importExtension,
+    },
   }
 ) => {
   if (
@@ -62,11 +67,29 @@ export const handleGraphQLRootObjectTypeField: GraphQLTypeHandler<
 
   const resolverTypeString = `NonNullable<${resolversTypeMeta.typeString}>`;
 
-  let variableStatement = `export const ${resolverName}: ${resolverTypeString} = async (_parent, _arg, _ctx) => { ${suggestion} };`;
-  if (belongsToRootObject === 'Subscription') {
-    variableStatement = `export const ${resolverName}: ${resolverTypeString} = {
+  const rootObjectKey = belongsToRootObject.toLowerCase() as
+    | 'query'
+    | 'mutation'
+    | 'subscription';
+  const useSatisfies =
+    resolverTypingStyle[rootObjectKey] === 'satisfies' ||
+    resolverTypingStyle[rootObjectKey] === 'prefer-satisfies';
+
+  let variableStatement: string;
+  if (useSatisfies) {
+    variableStatement = `export const ${resolverName} = (async (_parent, _arg, _ctx) => { ${suggestion} }) satisfies ${resolverTypeString};`;
+    if (belongsToRootObject === 'Subscription') {
+      variableStatement = `export const ${resolverName} = ({
       subscribe: async (_parent, _arg, _ctx) => { ${suggestion} },
-    }`;
+    }) satisfies ${resolverTypeString};`;
+    }
+  } else {
+    variableStatement = `export const ${resolverName}: ${resolverTypeString} = async (_parent, _arg, _ctx) => { ${suggestion} };`;
+    if (belongsToRootObject === 'Subscription') {
+      variableStatement = `export const ${resolverName}: ${resolverTypeString} = {
+    subscribe: async (_parent, _arg, _ctx) => { ${suggestion} },
+  };`;
+    }
   }
 
   const resolverTypeImportDeclaration = printImportLine({

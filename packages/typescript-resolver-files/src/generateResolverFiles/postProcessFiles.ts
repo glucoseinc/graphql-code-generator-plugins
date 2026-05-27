@@ -2,7 +2,8 @@ import type { SourceFile } from 'ts-morph';
 import * as path from 'path';
 import { cwd } from '../utils/index.js';
 import type { ResolverFile, GenerateResolverFilesContext } from './types.js';
-import { getVariableStatementWithExpectedIdentifier } from './getVariableStatementWithExpectedIdentifier.js';
+import type { ResolverTypingStyle } from '../validatePresetConfig/index.js';
+import { ensureExportedResolver } from './ensureExportedResolver.js';
 import {
   type AddedPropertyAssignmentNodes,
   addObjectTypeResolversPropertyAssignmentNodesIfNotImplemented,
@@ -20,6 +21,7 @@ export const postProcessFiles = ({
   config: {
     tsMorph: { project },
     fixObjectTypeResolvers,
+    resolverTypingStyle,
   },
   result,
 }: GenerateResolverFilesContext): void => {
@@ -70,9 +72,20 @@ export const postProcessFiles = ({
       sourceFile.getFilePath()
     );
 
+    const resolvedTypingStyle: ResolverTypingStyle =
+      resolverFile.__filetype === 'rootObjectTypeFieldResolver'
+        ? resolverTypingStyle[
+            resolverFile.meta.belongsToRootObject.toLowerCase() as
+              | 'query'
+              | 'mutation'
+              | 'subscription'
+          ]
+        : resolverTypingStyle.query;
+
     const { addedVariableStatement } = ensureExportedResolver(
       sourceFile,
-      resolverFile
+      resolverFile,
+      resolvedTypingStyle
     );
 
     if (
@@ -160,109 +173,6 @@ export const postProcessFiles = ({
       content: sourceFile.getText(),
     };
   });
-};
-
-/**
- * Ensure correctly named resolvers are exported
- */
-const ensureExportedResolver = (
-  sourceFile: SourceFile,
-  resolverFile: ResolverFile
-): { addedVariableStatement: boolean } => {
-  const { variableStatement, isExported } =
-    getVariableStatementWithExpectedIdentifier(sourceFile, resolverFile);
-
-  /**
-   * If we found the variable statement replace its type with the expected resolver type string
-   *
-   * This is because we change the type of the resolver in some cases:
-   * 1. When `extend type <Object>` is used, we might change its original type to the picked version
-   *    e.g. `Book` might become `Pick<Book, 'title' | 'author'>`
-   */
-  let ensureCorrectResolverType: (() => void) | undefined = undefined;
-  if (variableStatement && resolverFile.meta.resolverType?.final) {
-    const variableDeclaration = variableStatement
-      .getDeclarationList()
-      .getDeclarations()[0];
-    const typeNode = variableDeclaration?.getTypeNode();
-
-    ensureCorrectResolverType = typeNode
-      ? () => {
-          const trimTypeString = (value: string): string =>
-            value.replace(/[\n\r\s]/g, '');
-
-          const trimmedOriginalTypeString = trimTypeString(typeNode.getText());
-          typeNode.replaceWithText(resolverFile.meta.resolverType.final);
-
-          // If the formatted type is the semantically the same but formatted differently from `resolverType.final`
-          // e.g.
-          // ```
-          // Pick<
-          //   BookResolvers,
-          //   | 'title'
-          //   | 'author'
-          // >`
-          // vs
-          // `Pick<Book, 'author' | 'title'>`
-          // ```
-          const newTypeStringVariants =
-            'otherVariants' in resolverFile.meta.resolverType
-              ? [
-                  resolverFile.meta.resolverType.final,
-                  ...resolverFile.meta.resolverType.otherVariants,
-                ]
-              : [resolverFile.meta.resolverType.final];
-          const trimmedNewTypeStringVariants =
-            newTypeStringVariants.map(trimTypeString);
-
-          if (
-            !trimmedNewTypeStringVariants.find(
-              (newText) => newText === trimmedOriginalTypeString
-            )
-          ) {
-            resolverFile.filesystem.contentUpdated = true;
-          }
-        }
-      : () => {
-          variableDeclaration.setType(resolverFile.meta.resolverType.final);
-          resolverFile.filesystem.contentUpdated = true;
-        };
-  }
-
-  // For non-scalarResolver, ensure correct type is imported
-  // For scalarResolver, we don't need to add type to the variable statement for a few reasons:
-  // - For cases when we need to create a new GraphQLScalarType, it infer the type from `new GraphQLScalarType`
-  // - For cases when there's custom user logic, it's up to the user to import the correct type or call `new GraphQLScalarType` by themselves
-  if (
-    resolverFile.__filetype !== 'scalarResolver' &&
-    ensureCorrectResolverType
-  ) {
-    ensureCorrectResolverType();
-  }
-
-  if (!variableStatement) {
-    // Did not find variable statement with expected identifier, add it to the end with a warning
-    sourceFile.addStatements(resolverFile.meta.variableStatement);
-    resolverFile.filesystem.contentUpdated = true;
-
-    return { addedVariableStatement: true };
-  } else if (variableStatement && !isExported) {
-    // If has identifier but not exported
-    // Add export keyword to statement
-    const isExpectedIdentifierExported = Boolean(
-      sourceFile
-        .getExportedDeclarations()
-        .get(resolverFile.mainImportIdentifier)
-    );
-    if (!isExpectedIdentifierExported) {
-      variableStatement.setIsExported(true);
-      resolverFile.filesystem.contentUpdated = true;
-    }
-    // else, if identifier's been exported do nothing
-    return { addedVariableStatement: false };
-  }
-
-  return { addedVariableStatement: false };
 };
 
 /**

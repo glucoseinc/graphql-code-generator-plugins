@@ -51,6 +51,18 @@ export type ModuleNamingMode = number | 'all';
 
 export type ScalarsOverridesType = string | { input: string; output: string };
 
+export type ResolverTypingStyle =
+  | 'annotation'
+  | 'prefer-annotation'
+  | 'prefer-satisfies'
+  | 'satisfies';
+
+export type NormalizedResolverTypingStyle = {
+  query: ResolverTypingStyle;
+  mutation: ResolverTypingStyle;
+  subscription: ResolverTypingStyle;
+};
+
 export interface ParsedPresetConfig {
   add?: Record<string, AddPluginConfig>;
   resolverTypesPath: string;
@@ -79,6 +91,7 @@ export interface ParsedPresetConfig {
   typesPluginsConfig: ParsedTypesPluginsConfig;
   tsMorphProjectOptions: ProjectOptions;
   fixObjectTypeResolvers: NormalizedFixObjectTypeResolvers;
+  resolverTypingStyle: NormalizedResolverTypingStyle;
   /** @deprecated Use importExtension instead */
   emitLegacyCommonJSImports: boolean;
   importExtension: ImportExtension;
@@ -111,6 +124,9 @@ export interface RawPresetConfig {
     typeScriptResolversPlugin.TypeScriptResolversPluginConfig;
   tsConfigFilePath?: string;
   fixObjectTypeResolvers?: string | Record<string, string>;
+  resolverTypingStyle?:
+    | string
+    | Partial<Record<'query' | 'mutation' | 'subscription', string>>;
   /** @deprecated Use importExtension instead */
   emitLegacyCommonJSImports?: boolean;
   importExtension?: ImportExtension;
@@ -124,6 +140,9 @@ export interface TypedPresetConfig extends RawPresetConfig {
   fixObjectTypeResolvers?:
     | StringFixObjectTypeResolvers
     | NormalizedFixObjectTypeResolvers;
+  resolverTypingStyle?:
+    | ResolverTypingStyle
+    | Partial<Record<'query' | 'mutation' | 'subscription', ResolverTypingStyle>>;
   typesPluginsConfig?: ParsedTypesPluginsConfig;
   resolverGeneration?: StringResolverGeneration | NormalizedResolverGeneration;
   mergeSchema?:
@@ -156,6 +175,7 @@ export const validatePresetConfig = (
     typesPluginsConfig = {},
     tsConfigFilePath = './tsconfig.json',
     fixObjectTypeResolvers = 'fast',
+    resolverTypingStyle = 'annotation' as RawPresetConfig['resolverTypingStyle'],
     emitLegacyCommonJSImports,
     importExtension,
   }: RawPresetConfig,
@@ -192,6 +212,8 @@ export const validatePresetConfig = (
       )
     );
   }
+
+  const parsedResolverTypingStyle = parseResolverTypingStyle(resolverTypingStyle);
 
   if (
     typeof resolverGeneration !== 'object' &&
@@ -326,7 +348,6 @@ export const validatePresetConfig = (
   }
 
   const validatedAdd = validateAddOption(add);
-
   const normalizedImportExtension = normalizeImportExtension(
     finalImportExtension,
     finalEmitLegacyCommonJSImports
@@ -355,6 +376,7 @@ export const validatePresetConfig = (
     typesPluginsConfig: validatedTypesPluginsConfig,
     tsMorphProjectOptions,
     fixObjectTypeResolvers: parseFixObjectTypeResolvers(fixObjectTypeResolvers),
+    resolverTypingStyle: parsedResolverTypingStyle,
     emitLegacyCommonJSImports: finalEmitLegacyCommonJSImports,
     importExtension: normalizedImportExtension,
   };
@@ -528,6 +550,55 @@ const parseMergeSchema = (
   return {
     path: mergeSchema.path,
     config: mergeSchema.config as schemaAstPlugin.SchemaASTConfig,
+  };
+};
+
+const isValidResolverTypingStyle = (value: unknown): value is ResolverTypingStyle =>
+  value === 'annotation' ||
+  value === 'prefer-annotation' ||
+  value === 'prefer-satisfies' ||
+  value === 'satisfies';
+
+const parseResolverTypingStyle = (
+  input: RawPresetConfig['resolverTypingStyle']
+): NormalizedResolverTypingStyle => {
+  const defaultStyle: ResolverTypingStyle = 'annotation';
+
+  if (typeof input === 'string' || input === undefined) {
+    const value = input ?? defaultStyle;
+    if (!isValidResolverTypingStyle(value)) {
+      throw new Error(
+        fmt.error(
+          'presetConfig.resolverTypingStyle must be "annotation", "prefer-annotation", "prefer-satisfies" or "satisfies" (default is "annotation")',
+          'Validation'
+        )
+      );
+    }
+    return { query: value, mutation: value, subscription: value };
+  }
+
+  const parseKey = (
+    key: 'query' | 'mutation' | 'subscription',
+    value: string | undefined
+  ): ResolverTypingStyle => {
+    if (value === undefined) {
+      return defaultStyle;
+    }
+    if (!isValidResolverTypingStyle(value)) {
+      throw new Error(
+        fmt.error(
+          `presetConfig.resolverTypingStyle.${key} must be "annotation", "prefer-annotation", "prefer-satisfies" or "satisfies"`,
+          'Validation'
+        )
+      );
+    }
+    return value;
+  };
+
+  return {
+    query: parseKey('query', input.query),
+    mutation: parseKey('mutation', input.mutation),
+    subscription: parseKey('subscription', input.subscription),
   };
 };
 
